@@ -1,0 +1,13 @@
+
+class myObject {
+    construct (name:age) {
+        self name = name;
+        self age = age;
+    }
+
+    method myMethod(:) {
+        outln self@name + " " + string self@age;
+    }
+}
+
+thee = new myObject("Yzabel":10);
