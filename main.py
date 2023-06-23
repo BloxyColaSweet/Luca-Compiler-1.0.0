@@ -23,7 +23,6 @@ for each in range(300):
 	name = f"L24x{address}"
 	LucaAllocate.update({name:None})
 	address += 1
-	
 
 last_condition = None
 
@@ -31,14 +30,25 @@ building = True
 
 binary = {'1', '0'}
 
+error = ""
 
-def colored(r, g, b, text, endl="\n"):
+def seterror(message, syntax):
+	error = colored2(255, 60, 0, f"SyntaxError : #>\n{syntax}\n{message}", False)
+
+
+def colored(r, g, b, text, devonly=True, endl="\n"):
 	global developerRead
-	if developerRead:
+	if developerRead and devonly:
 		text = "\033[1m" + text
 		text = text.replace('#>', f'\033[0m\033[38;2;{r};{g};{b}m')
 		text = text.replace("\n", "\n >>> ", 1)
 		print(f"\033[38;2;{r};{g};{b}m{text}\033[0m", end=endl)
+
+def colored2(r, g, b, text, devonly=True, endl="\n"):
+	text = "\033[1m" + text
+	text = text.replace('#>', f'\033[0m\033[38;2;{r};{g};{b}m')
+	text = text.replace("\n", "\n >>> ", 1)
+	print(f"\033[38;2;{r};{g};{b}m{text}\033[0m", end=endl)
 
 
 def log(object):
@@ -76,6 +86,8 @@ class Lang:
 
 		colored(258, 179, 234, f"[*] VALIDATION : now validating...#>\n{segment}\n")
 		
+		colored(258, 179, 234, f"[*] VALIDATION : scope presented : #>\n{scope}\n")
+
 		statements = Lang.Statements(segment, scope)
 		if statements[0]:
 			colored(258, 179, 234, f"[*] VALIDATION : statement validating...#>\n{segment}\n")
@@ -129,11 +141,21 @@ class Lang:
 					first = True
 					dir   = LucaCreated 
 					ranconstr = ''
-					currentmethod = ""
-					is_method = False
 					for name in pointed:
 						if first:
-							LucaCreated.update({name:copy.deepcopy(LucaClasses[name])})
+							try:
+								LucaCreated.update({name:copy.deepcopy(LucaClasses[name])})
+							except:
+								try:
+									LucaCreated.update({name:copy.deepcopy(LucaStored[name])})
+								except:
+									try:
+										LucaCreated.update({name:copy.deepcopy(LucaStored["const:"+name])})
+									except:
+										try:
+											LucaCreated.update({name:copy.deepcopy(LucaStored["final:"+name])})
+										except:
+											return [False]
 							dir = dir[name]
 							first = False
 						else:
@@ -162,6 +184,7 @@ class Lang:
 									if val[0]:
 										param[pos] = val[1]
 									else:
+										seterror('is not a valid argument', param[pos])
 										return [False]
 									pos += 1
 	
@@ -217,14 +240,14 @@ class Lang:
 									dir = dir[name]
 									
 
-					if ranconstr != None:
+					if ranconstr != None and ranconstr != "":
 						dir = ranconstr
 
 					return [True, dir]
 				
 				else:
 					return [False]
-		
+
 		class SelfVariable:
 			def __new__(self, segment, scope=""):
 				if segment.startswith('self '):
@@ -243,6 +266,7 @@ class Lang:
 						if val[0]:
 							value = val[1]
 						else:
+							seterror('is not a valid syntax', segment)
 							return [False]
 
 						global LucaCreated
@@ -253,6 +277,7 @@ class Lang:
 						scoop = scope.split('.')
 						for name in scoop:
 							dir = dir[name]
+						
 						dir[thename] = value
 
 						return [True, value]
@@ -319,6 +344,16 @@ class Lang:
 				if segment == 'true':
 					return [True, True]
 				elif segment == 'false':
+					return [True, False]
+				else:
+					return [False]
+
+		class Binomial:
+
+			def __new__(self, segment):
+				if segment == 'yes':
+					return [True, True]
+				elif segment == 'no':
 					return [True, False]
 				else:
 					return [False]
@@ -1012,8 +1047,15 @@ class Lang:
 					reen = LucaCreated
 					for space in scope:
 						reen = reen[space]
-					
-					return[True, reen[name]]
+
+					if name in reen:
+						return [True, reen[name]]
+					elif "const:" + name in reen:
+						return [True, reen["const:" + name]]
+					elif "final:" + name in reen:
+						return [True, reen["final:" + name]]
+					else:
+						return [False]
 
 				else:
 					return [False]
@@ -1024,8 +1066,15 @@ class Lang:
 				global LucaClasses
 				global LucaStored
 				colored(219, 145, 15, f"[?] POINTER : scope present.#>\n{scope + '.' + segment}\n")
-				if segment in LucaStored:
-					return [True, LucaStored[segment]]
+				if scope == "":
+					if segment in LucaStored:
+						return [True, LucaStored[segment]]
+					elif "const:" + segment in LucaStored:
+						return [True, LucaStored["const:" + segment]]
+					elif "final:" + segment in LucaStored:
+						return [True, LucaStored["final:" + segment]]
+					else:
+						return [False]
 				elif scope != "":
 					scope = scope.split('.')
 					
@@ -1043,24 +1092,67 @@ class Lang:
 
 					if segment in dex:
 						return [True, dex[segment]]
+					elif "const:" + segment in dex:
+						return [True, dex["const:" + segment]]
+					elif "final:" + segment in dex:
+						return [True, dex["final:" + segment]]
 					else:
 						return [False]
 				else:
 					colored(219, 145, 15, f"[?] POINTER : pointer is not valid.#>\n{scope + '.' + segment}\n")
 					return [False]
-	
+
 		class Variable:
 
-			def __new__(self, segment, scope=""):
+			def __new__(self, segment, scope="", const=False, final=False, inst=False, prop=False):
 				if " = " in segment:
-					colored(252, 152, 3,
-					        f"[?] DATATYPE : variable validating... #>\n{segment}\n")
+					colored(252, 152, 3, f"[?] DATATYPE : variable validating... #>\n{segment}\n")
+
+					if const:
+						if segment.startswith('const '):
+							segment = segment[len('const '):]
+						else: return [False]
+					
+					if final:
+						if segment.startswith('final '):
+							segment = segment[len('final '):]
+						else: return [False]
+
+					if inst:
+						if segment.startswith('inst '):
+							segment = segment[len('inst '):]
+						else: return [False]
+
+					if prop:
+						if segment.startswith('prop '):
+							segment = segment[len('prop '):]
+						else: return [False]
+					
 					assigned = segment[:segment.index(' = ')].replace(' ', '')
+
+					if "final:" + assigned in LucaStored.keys():
+						return [False]
+					elif "const:" + assigned in LucaStored.keys():
+						return [False]
 
 					if assigned.isidentifier():
 						pass
 					else:
 						return [False]
+					
+					if   const:
+						if assigned in LucaStored:
+							return [False]
+						if ("const:" + assigned) in LucaStored:
+							return [False]
+					elif final:
+						if assigned not in LucaStored:
+							return [False]
+						if ("final:" + assigned) in LucaStored:
+							return [False]
+					else:
+						pass
+
 					colored(
 					 252, 152, 3,
 					 f"[?] DATATYPE : variable assigned is identifier #>\n{assigned}\n")
@@ -1076,25 +1168,75 @@ class Lang:
 					if validate[0]:
 						object = validate[1]
 					else:
-						colored(252, 152, 3,
-						        f"[X] DATATYPE : variable object is NOT valid #>\n{object}\n")
+						colored(252, 152, 3,f"[X] DATATYPE : variable object is NOT valid #>\n{object}\n")
 						return [False]
 
-					colored(252, 152, 3,
-					        f"[?] DATATYPE : variable object is valid #>\n{object}\n")
+					colored(252, 152, 3,f"[?] DATATYPE : variable object is valid #>\n{object}\n")
+					
+					if inst:
+						scopespace = LucaCreated
+					elif prop:
+						scopespace = LucaClasses
+					else:
+						scopespace = LucaCreated
 
-					global LucaStored
-
-					scopespace = LucaClasses
 					if scope != "":
 						scope = list(scope.split('.'))
 						for name in scope:
 							scopespace = scopespace[name]
-						scopespace[assigned] = object
+
+						if   const: 
+							scopespace["const:" + assigned] = object
+						elif final: 
+							scopespace.pop(assigned)
+							scopespace["final:" + assigned] = object
+						else:		
+							scopespace[assigned] = object
 					else:
-						LucaStored[assigned] = object
+						if   const: 
+							LucaStored["const:" + assigned] = object
+						elif final: 
+							LucaStored.pop(assigned)
+							LucaStored["final:" + assigned] = object
+						else:		LucaStored[assigned] = object
 
 					return [True, object]
+				else:
+					return [False]
+
+		class Constant:
+			def __new__(self, segment, scope=""):
+
+				constant = Lang.Datatype.Variable(segment, scope, const=True)
+				if constant[0]:
+					return [True, constant[1]]
+				else:
+					return [False]
+			
+		class Final:
+			def __new__(self, segment, scope=""):
+
+				final = Lang.Datatype.Variable(segment, scope, final=True)
+				if final[0]:
+					return [True, final[1]]
+				else:
+					return [False]
+		
+		class Instance:
+			def __new__(self, segment, scope=""):
+
+				inst = Lang.Datatype.Variable(segment, scope, inst=True)
+				if inst[0]:
+					return [True, inst[1]]
+				else:
+					return [False]
+		
+		class Property:
+			def __new__(self, segment, scope=""):
+
+				inst = Lang.Datatype.Variable(segment, scope, prop=True)
+				if inst[0]:
+					return [True, inst[1]]
 				else:
 					return [False]
 
@@ -1168,6 +1310,26 @@ class Lang:
 				colored(139, 179, 7, f"[*] DATATYPE : self variable validated.#>\n{segment}\n")
 				return [True, selfvariable[1]]
 				
+			constant = Lang.Datatype.Constant(segment, scope)
+			if constant[0]:
+				colored(139, 179, 7, f"[*] DATATYPE : constant validated.#>\n{segment}\n")
+				return [True, constant[1]]
+
+			final = Lang.Datatype.Final(segment, scope)
+			if final[0]:
+				colored(139, 179, 7, f"[*] DATATYPE : final validated.#>\n{segment}\n")
+				return [True, final[1]]
+
+			instance = Lang.Datatype.Instance(segment, scope)
+			if instance[0]:
+				colored(139, 179, 7, f"[*] DATATYPE : instance validated.#>\n{segment}\n")
+				return [True, instance[1]]
+
+			property = Lang.Datatype.Property(segment, scope)
+			if property[0]:
+				colored(139, 179, 7, f"[*] DATATYPE : property validated.#>\n{segment}\n")
+				return [True, instance[1]]
+
 			variable = Lang.Datatype.Variable(segment, scope)
 			if variable[0]:
 				colored(139, 179, 7, f"[*] DATATYPE : variable validated.#>\n{segment}\n")
@@ -1230,6 +1392,11 @@ class Lang:
 			if boolean[0]:
 				colored(139, 179, 7, f"[*] DATATYPE : boolean validated.#>\n{segment}\n")
 				return [True, boolean[1]]
+
+			binomial = Lang.Datatype.Binomial(segment)
+			if binomial[0]:
+				colored(139, 179, 7, f"[*] DATATYPE : binomial validated.#>\n{segment}\n")
+				return [True, binomial[1]]
 
 			bit = Lang.Datatype.Bit(segment)
 			if bit[0]:
@@ -3186,7 +3353,12 @@ class Lang:
 					LucaStored[defined[0][pos]] = parameters[pos]
 					pos += 1
 
-				return [True, Lang(defined[1], name)]
+				returned = Lang(defined[1])
+
+				for each in defined[0]:
+					LucaStored.pop(each)
+
+				return [True, returned]
 			else:
 				return [False]
 		
@@ -3551,6 +3723,13 @@ class Lang:
 				
 	class Statements:
 
+		def Empty(segment):
+			if segment.startswith('{') and segment.endswith('}'):
+				Lang(segment[1:-1])
+				return [True, None]
+			else:
+				return [False]
+
 		def If(segment):
 			if segment.startswith("if ") and segment.endswith('}'):
 				if ('(' in segment and segment.index('(') == len('if ')) and (
@@ -3845,6 +4024,9 @@ class Lang:
 					LucaClasses[classname] = {
 						"<classname>":classname,
 					}
+					colored(
+					 219, 116, 20,
+					 f"[?] STATEMENT : class statement returned scope: #>\n{classname}\n")
 					Lang(body, classname)
 				else:
 					dir = LucaClasses
@@ -3857,7 +4039,7 @@ class Lang:
 					scoop = ".".join(scope)
 					Lang(body, f"{scoop}.{classname}")
 
-				return [True, None]
+				return [True, LucaClasses[classname]]
 			else:
 				return [False]
 
@@ -3922,6 +4104,10 @@ class Lang:
 				parameters = methodname[methodname.index('(')+1:methodname.index(')')].split(':')
 				body = segment[segment.index('{')+1:segment.rindex('}')] 
 
+				colored(
+				 166, 20, 219,
+				 f"[*] STATEMENT : method statement recieved scope : #>\n{scope}\n")
+
 				if scope == "":
 					return [False]
 				
@@ -3939,7 +4125,6 @@ class Lang:
 
 				parameters = parms
 
-
 				dir.update({mname:{'<method>':[parameters, body]}})
 
 				return [True, None]
@@ -3948,20 +4133,25 @@ class Lang:
 
 
 		def __new__(self, segment, scope=""):
-			if_ = Lang.Statements.If(segment)
-			elseif_ = Lang.Statements.ElseIf(segment)
-			else_ = Lang.Statements.Else(segment)
-			while_ = Lang.Statements.While(segment)
-			for_ = Lang.Statements.For(segment)
-			repeatuntil_ = Lang.Statements.RepeatUntil(segment)
-			function_ = Lang.Statements.Function(segment)
-			namespace_ = Lang.Statements.Namespace(segment, scope)
-			class_ = Lang.Statements.Class(segment, scope)
-			initial_ = Lang.Statements.Initial(segment, scope)
-			construct_ = Lang.Statements.Construct(segment, scope)
-			method_ = Lang.Statements.Method(segment, scope)
+			empty_ 			= Lang.Statements.Empty(segment)
+			if_ 			= Lang.Statements.If(segment)
+			elseif_ 		= Lang.Statements.ElseIf(segment)
+			else_ 			= Lang.Statements.Else(segment)
+			while_ 			= Lang.Statements.While(segment)
+			for_ 			= Lang.Statements.For(segment)
+			repeatuntil_ 	= Lang.Statements.RepeatUntil(segment)
+			function_ 		= Lang.Statements.Function(segment)
+			namespace_ 		= Lang.Statements.Namespace(segment, scope)
+			class_ 			= Lang.Statements.Class(segment, scope)
+			initial_ 		= Lang.Statements.Initial(segment, scope)
+			construct_	    = Lang.Statements.Construct(segment, scope)
+			method_ 		= Lang.Statements.Method(segment, scope)
 
-			if   if_[0]:
+			if   empty_[0]:
+				colored(166, 20, 219,
+				        f"[*] STATEMENT : if statement validated.#>\n{segment}\n")
+				return [True, None]
+			elif   if_[0]:
 				colored(166, 20, 219,
 				        f"[*] STATEMENT : if statement validated.#>\n{segment}\n")
 				return [True, None]
@@ -3997,7 +4187,7 @@ class Lang:
 			elif class_[0]:
 				colored(166, 20, 219,
 				        f"[*] STATEMENT : class statement validated.#>\n{segment}\n")
-				return [True, None]
+				return [True, class_[1]]
 			elif initial_[0]:
 				colored(166, 20, 219,
 				        f"[*] STATEMENT : initial statement validated.#>\n{segment}\n")
@@ -4127,12 +4317,15 @@ class Lang:
 						219, 116, 20,
 						f"[*] LANG : new code returned #>\n{segment}\n")
 				else:
-					print('error, is not a valid syntax.')
+					seterror('is not a valid syntax', segment)
+					print(error)
 					break
 					
 			else:
-				print('error, is not a valid syntax.')
+				seterror('main method is not found.', segment)
+				print(error)
 				break
+
 		return None
 
 import traceback
@@ -4141,7 +4334,7 @@ from pprint import pprint
 try:
 	Lang(script)
 except Exception:
-    traceback.print_exc()
+    pass
 
 print('\nClasses : ')
 pprint(LucaClasses, indent=0.5)
@@ -4158,9 +4351,4 @@ print()
 print('\nStored : ')
 print(LucaStored)
 print()
-
-"""
-
-for key, value in LucaAllocate.items():
-	print(key, value)
-"""
+""""""
